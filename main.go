@@ -13,12 +13,18 @@ import (
 
 func main() {
 	r := mux.NewRouter()
+	r.HandleFunc("/man.css", handleStylesheet)
 	r.Handle(`/{section:\d+}`, handleWithErrors(handleSection))
 	r.Handle(`/{section:\d+}/{page:\w+}`, handleWithErrors(handleManpage))
 	log.Println(http.ListenAndServe("localhost:6006", r))
 }
 
 var manpath = []string{"/usr/share/man", "/usr/local/share/man"}
+
+func handleStylesheet(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	w.Write(defaultStylesheet)
+}
 
 func handleWithErrors(handler func(http.ResponseWriter, *http.Request) error) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
