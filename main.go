@@ -75,5 +75,10 @@ func handleManpage(w http.ResponseWriter, req *http.Request) error {
 	}
 	defer f.Close()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	return renderMandoc(req.Context(), w, f)
+	// We pipe the mandoc output directly to the ResponseWriter, so after it returns we can't
+	// return an error and change the status code because we've already sent a 200.
+	if err := renderMandoc(req.Context(), w, f); err != nil {
+		log.Println(err)
+	}
+	return nil
 }
