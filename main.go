@@ -13,7 +13,7 @@ import (
 
 func main() {
 	r := mux.NewRouter()
-	r.HandleFunc("/man.css", handleStylesheet)
+	r.HandleFunc("/mandoc.css", handleStylesheet)
 	r.Handle(`/{section:\d+}`, handleWithErrors(handleSection))
 	r.Handle(`/{section:\d+}/{page:\w+}`, handleWithErrors(handleManpage))
 	log.Println(http.ListenAndServe("localhost:6006", r))
