@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -69,9 +71,33 @@ func handleSection(w http.ResponseWriter, req *http.Request) error {
 	return nil
 }
 
+func getManpageLocation(ctx context.Context, section, name string) (string, error) {
+	var args []string
+	if section != "" {
+		args = []string{"-w", section, name}
+	} else {
+		args = []string{"-w", name}
+	}
+	path, err := exec.CommandContext(ctx, "man", args...).Output()
+	// We assume that if `man -w` reports a failure, it's because it can't find the
+	// manpage. We don't assume a specific exit status, because they might vary between
+	// platforms.
+	if _, ok := err.(*exec.ExitError); ok {
+		return "", os.ErrNotExist
+	}
+	return strings.TrimSpace(string(path)), err
+}
+
 func handleManpage(w http.ResponseWriter, req *http.Request) error {
 	vars := mux.Vars(req)
-	fname := filepath.Join("/usr/share/man", "man"+vars["section"], vars["page"]+"."+vars["section"])
+	return serveManpage(w, req, vars["section"], vars["page"])
+}
+
+func serveManpage(w http.ResponseWriter, req *http.Request, section, page string) error {
+	fname, err := getManpageLocation(req.Context(), section, page)
+	if err != nil {
+		return err
+	}
 	f, err := os.Open(fname)
 	if err != nil {
 		return err
@@ -80,35 +106,12 @@ func handleManpage(w http.ResponseWriter, req *http.Request) error {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// We pipe the mandoc output directly to the ResponseWriter, so after it returns we can't
 	// return an error and change the status code because we've already sent a 200.
-	if err := renderMandoc(req.Context(), "/usr/share/man", w, f); err != nil {
+	if err := renderMandoc(req.Context(), filepath.Join(fname, "..", ".."), w, f); err != nil {
 		log.Println(err)
 	}
 	return nil
 }
 
 func handleSearch(w http.ResponseWriter, req *http.Request) error {
-	query := mux.Vars(req)["page"]
-	mandir, err := os.Open("/usr/share/man")
-	if err != nil {
-		return err
-	}
-	defer mandir.Close()
-	dirs, err := mandir.Readdir(-1)
-	if err != nil {
-		return err
-	}
-	for _, d := range dirs {
-		if d.IsDir() && strings.HasPrefix(d.Name(), "man") {
-			section := strings.TrimPrefix(d.Name(), "man")
-			_, err := os.Stat(filepath.Join("/usr/share/man", d.Name(), query+"."+section))
-			if err == nil {
-				http.Redirect(w, req, "/"+section+"/"+query, http.StatusFound)
-				return nil
-			}
-			if !os.IsNotExist(err) {
-				return err
-			}
-		}
-	}
-	return os.ErrNotExist
+	return serveManpage(w, req, "", mux.Vars(req)["page"])
 }
