@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -42,33 +40,6 @@ func handleWithErrors(handler func(http.ResponseWriter, *http.Request) error) ht
 		}
 		w.WriteHeader(http.StatusInternalServerError)
 	})
-}
-
-func handleSection(w http.ResponseWriter, req *http.Request) error {
-	section := mux.Vars(req)["section"]
-	f, err := os.Open(filepath.Join("/usr/share/man", "man"+section))
-	if err != nil {
-		return err
-	}
-	suffix := "." + section
-	defer f.Close()
-	entries, err := f.Readdirnames(-1)
-	if err != nil {
-		return err
-	}
-	sort.Strings(entries)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	io.WriteString(w, "<!doctype html><html><head><title>")
-	io.WriteString(w, "Man section ")
-	io.WriteString(w, section)
-	io.WriteString(w, "</title></head><body><ul>")
-	for _, name := range entries {
-		if trimmed := strings.TrimSuffix(name, suffix); len(trimmed) < len(name) {
-			io.WriteString(w, `<li><a href="/`+section+"/"+trimmed+`">`+trimmed+"</a></li>")
-		}
-	}
-	io.WriteString(w, "</ul></body></html>")
-	return nil
 }
 
 func getManpageLocation(ctx context.Context, section, name string) (string, error) {
