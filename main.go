@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -10,14 +12,32 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/pkg/browser"
 )
 
 func main() {
+	var serveAt string
+	flag.StringVar(&serveAt, "addr", "localhost:", "Serve at `host:port`")
+	flag.Parse()
+	srv, err := net.Listen("tcp", serveAt)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if args := flag.Args(); len(args) > 0 {
+		go func() {
+			// The browser's connection is guaranteed to succeed, since we're already listening for connections at
+			// this point.
+			if err := browser.OpenURL("http://" + srv.Addr().String() + "/" + strings.Join(args, "/")); err != nil {
+				log.Println(err)
+			}
+		}()
+	}
 	r := mux.NewRouter()
 	r.HandleFunc("/mandoc.css", handleStylesheet)
 	r.Handle(`/{page:\w+}`, handleWithErrors(handleSearch))
 	r.Handle(`/{section:\d+}/{page:\w+}`, handleWithErrors(handleManpage))
-	log.Println(http.ListenAndServe("localhost:6006", r))
+	log.Printf("Serving manpages at %s. Press Ctrl-C to stop", srv.Addr())
+	log.Println(http.Serve(srv, r))
 }
 
 var manpath = []string{"/usr/share/man", "/usr/local/share/man"}
