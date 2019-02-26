@@ -1,8 +1,10 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"flag"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -27,9 +29,7 @@ func main() {
 		go func() {
 			// The browser's connection is guaranteed to succeed, since we're already listening for connections at
 			// this point.
-			if err := browser.OpenURL("http://" + srv.Addr().String() + "/" + strings.Join(args, "/")); err != nil {
-				log.Println(err)
-			}
+			logError(browser.OpenURL("http://" + srv.Addr().String() + "/" + strings.Join(args, "/")))
 		}()
 	}
 	r := mux.NewRouter()
@@ -92,15 +92,28 @@ func serveManpage(w http.ResponseWriter, req *http.Request, section, page string
 		return err
 	}
 	defer f.Close()
+	r := io.Reader(f)
+	if strings.HasSuffix(fname, ".gz") {
+		gzr, err := gzip.NewReader(r)
+		if err != nil {
+			return err
+		}
+		defer func() { logError(gzr.Close()) }()
+		r = gzr
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// We pipe the mandoc output directly to the ResponseWriter, so after it returns we can't
 	// return an error and change the status code because we've already sent a 200.
-	if err := renderMandoc(req.Context(), filepath.Join(fname, "..", ".."), w, f); err != nil {
-		log.Println(err)
-	}
+	logError(renderMandoc(req.Context(), filepath.Join(fname, "..", ".."), w, r))
 	return nil
 }
 
 func handleSearch(w http.ResponseWriter, req *http.Request) error {
 	return serveManpage(w, req, "", mux.Vars(req)["page"])
+}
+
+func logError(err error) {
+	if err != nil {
+		log.Println(err)
+	}
 }
