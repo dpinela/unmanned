@@ -40,8 +40,6 @@ func main() {
 	log.Println(http.Serve(srv, r))
 }
 
-var manpath = []string{"/usr/share/man", "/usr/local/share/man"}
-
 func handleStylesheet(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.Write(defaultStylesheet)
